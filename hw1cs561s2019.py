@@ -41,9 +41,9 @@ class Board(object):
         for row in xrange(self.board_size):
             for col in xrange(self.board_size):
                 if self.board[row][col] == MY_EMITTER:
-                    self.my_score += self.plant_laser(row, col, MY_EMITTER)
+                    self.my_score += self.__plant_laser__(row, col, MY_EMITTER)
                 elif self.board[row][col] == THEIR_EMITTER:
-                    self.their_score += self.plant_laser(row, col, THEIR_EMITTER)
+                    self.their_score += self.__plant_laser__(row, col, THEIR_EMITTER)
 
     def pretty_print(self):
         print('Board {}x{} - {} vs {} - {} left'.format(self.board_size, self.board_size, self.my_score, self.their_score, self.actions_count))
