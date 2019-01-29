@@ -15,7 +15,7 @@ class Board(object):
         self.board_size = 0
         self.num_elements = 0
         self.board = []
-        self.element_count = 0
+        self.__iter_count__ = 0
         self.my_score = 0
         self.their_score = 0
         self.actions_count = 0
@@ -54,18 +54,18 @@ class Board(object):
             print(row)
 
     def __iter__(self):
+        self.__iter_count__ = 0
         return self
 
     # Iterates on all empty spaces only
     def next(self):
-        if self.element_count == self.num_elements:
-            self.element_count = 0
+        if self.__iter_count__ == self.num_elements:
             raise StopIteration
         else:
-            row = self.element_count // self.board_size
-            col = self.element_count % self.board_size
+            row = self.__iter_count__ // self.board_size
+            col = self.__iter_count__ % self.board_size
 
-            self.element_count += 1
+            self.__iter_count__ += 1
             cell = self.board[row][col]
             if cell == WHITE_SPACE:
                 return cell, row, col
@@ -118,8 +118,11 @@ class Board(object):
         applied_board.__plant_laser__(row, col, player_id)
         return applied_board
 
-    def get_utility(self):
-        return int(self.my_score > self.their_score)
+    def get_utility(self, for_player):
+        if for_player == MY_EMITTER:
+            return int(self.my_score > self.their_score)
+        else:
+            return int(self.their_score > self.my_score)
 
 
 class MiniMaxSolver:
@@ -127,89 +130,72 @@ class MiniMaxSolver:
         self.initial_state = initial_board
         self.lookup = dict()
 
-    def solve(self, player_id):
-        def get_max(current_state, turn):
+    def solve(self, player_id, debug=False):
+        def get_max(current_state, turn, level):
             max_row = -1
             max_col = -1
 
+            lvl_str = '--' * level
+
             if current_state.actions_count == 0:
-                return current_state.get_utility(), max_row, max_col
+                if debug:
+                    print(lvl_str + 'MaxTerminal@{} with {} Utility'.format(level, current_state.get_utility(player_id)))
+                return current_state.get_utility(player_id), max_row, max_col
 
             utility_value = -1  # Because utility can only be 0 or 1
             next_turn = THEIR_EMITTER if turn == MY_EMITTER else MY_EMITTER
             for cell, row, col in current_state:
                 updated_state = current_state.apply_action(row, col, turn)
-                min_val, min_row, min_col = get_min(updated_state, next_turn)
+                if debug:
+                    print(lvl_str + 'Max@{}-({}, {}) => {}vs{}'.format(level, row, col, updated_state.my_score, updated_state.their_score))
+                min_val, min_row, min_col = get_min(updated_state, next_turn, level + 1)
 
                 if min_val > utility_value:
                     utility_value = min_val
                     max_row = row
                     max_col = col
+                    if debug:
+                        print(lvl_str + 'UpdatedMax@{} -> {}'.format(level, utility_value))
 
             return utility_value, max_row, max_col
 
-        def get_min(current_state, turn):
+        def get_min(current_state, turn, level):
             min_row = -1
             min_col = -1
 
+            lvl_str = '--' * level
+
             if current_state.actions_count == 0:
-                return current_state.get_utility(), min_row, min_col
+                if debug:
+                    print(lvl_str + 'MinTerminal@{} with {} Utility'.format(level, current_state.get_utility(player_id)))
+                return current_state.get_utility(player_id), min_row, min_col
 
             utility_value = 2  # Because utility can only be 0 or 1
             next_turn = THEIR_EMITTER if turn == MY_EMITTER else MY_EMITTER
             for cell, row, col in current_state:
                 updated_state = current_state.apply_action(row, col, turn)
-                max_val, max_row, max_col = get_max(updated_state, next_turn)
+                if debug:
+                    print(lvl_str + 'Min@{}-({}, {}) => {}vs{}'.format(level, row, col, updated_state.my_score, updated_state.their_score))
+                max_val, max_row, max_col = get_max(updated_state, next_turn, level + 1)
 
                 if max_val < utility_value:
                     utility_value = max_val
                     min_row = row
                     min_col = col
+                    if debug:
+                        print(lvl_str + 'UpdatedMin@{} -> {}'.format(level, utility_value))
 
             return utility_value, min_row, min_col
 
-        sol_utility, sol_row, sol_col = get_max(self.initial_state, player_id)
+        sol_utility, sol_row, sol_col = get_max(self.initial_state, player_id, 0)
 
         return sol_row, sol_col
 
 
 board = Board()
-solver_1 = MiniMaxSolver(board)
 
-board.pretty_print()
+solver = MiniMaxSolver(board)
+solution_row, solution_col = solver.solve(MY_EMITTER, debug=False)
 
-solution_row, solution_col = solver_1.solve(MY_EMITTER)
-print('Applied {}, {}'.format(solution_row, solution_col))
-
-action_applied = board.apply_action(solution_row, solution_col, MY_EMITTER)
-action_applied.pretty_print()
-
-
-# Second test
-solver_2 = MiniMaxSolver(action_applied)
-solution_row, solution_col = solver_2.solve(THEIR_EMITTER)
-
-print('Applied {}, {}'.format(solution_row, solution_col))
-
-action_applied = action_applied.apply_action(solution_row, solution_col, THEIR_EMITTER)
-action_applied.pretty_print()
-
-
-# Third test
-solver_3 = MiniMaxSolver(action_applied)
-solution_row, solution_col = solver_3.solve(MY_EMITTER)
-
-print('Applied {}, {}'.format(solution_row, solution_col))
-
-action_applied = action_applied.apply_action(solution_row, solution_col, MY_EMITTER)
-action_applied.pretty_print()
-
-
-# Fourth test
-solver_4 = MiniMaxSolver(action_applied)
-solution_row, solution_col = solver_4.solve(THEIR_EMITTER)
-
-print('Applied {}, {}'.format(solution_row, solution_col))
-
-action_applied = action_applied.apply_action(solution_row, solution_col, THEIR_EMITTER)
-action_applied.pretty_print()
+output_fp = open('output.txt', 'w')
+output_fp.write('{} {}'.format(solution_row, solution_col))
