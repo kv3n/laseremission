@@ -184,5 +184,5 @@ board = Board()
 solver = MiniMaxSolver(board)
 solution_row, solution_col = solver.solve(MY_EMITTER, debug=False)
 
-output_fp = open('output.txt' hw, 'w')
+output_fp = open('output.txt', 'w')
 output_fp.write('{} {}'.format(solution_row, solution_col))
