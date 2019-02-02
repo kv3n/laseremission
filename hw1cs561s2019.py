@@ -1,4 +1,5 @@
 import copy
+from random import shuffle
 
 WHITE_SPACE = 0
 MY_EMITTER = 1
@@ -19,9 +20,9 @@ class Board(object):
         self.my_score = 0
         self.their_score = 0
 
-        with open('input.txt', 'rU') as fp:
+        with open('input.txt', 'r') as fp:
             for row_idx, line in enumerate(fp):
-                line = line.rstrip('\n')
+                line = line.rstrip('\r\n')
                 if row_idx == 0:
                     self.board_size = int(line)
                     self.num_elements = self.board_size * self.board_size
@@ -67,7 +68,7 @@ class Board(object):
                     # We need to check if the cell is not mark_id because you don't want to double tag a laser count
                     self.board[row][col] = BOTH_LASERS
                     marked_locations += 1
-                else:
+                elif cell == BLOCK:
                     break
             else:
                 break
@@ -108,81 +109,76 @@ class Board(object):
 
 
 class MiniMaxSolver:
-    def __init__(self, initial_board):
+    def __init__(self, initial_board, player_id):
         self.initial_state = initial_board
+        self.player_id = player_id
 
-    def solve(self, player_id, debug=False):
+    def solve(self, debug=False):
         def get_max(current_state, turn, level):
-            max_row = -1
-            max_col = -1
-
             lvl_str = '--' * level
 
             if len(current_state.action_set) == 0:
                 if debug:
-                    print(lvl_str + 'MaxTerminal@{} with {} Utility'.format(level, current_state.get_utility(player_id)))
-                return current_state.get_utility(player_id), max_row, max_col
+                    print(lvl_str + 'MaxTerminal@{} with {} Utility'.format(level, current_state.get_utility(self.player_id)))
+                return current_state.get_utility(self.player_id), None
 
-            utility_value = -1  # Because utility can only be 0 or 1
+            utility_value = -float('inf')  # Because utility can only be 0 or 1
             next_turn = THEIR_EMITTER if turn == MY_EMITTER else MY_EMITTER
-            for row, col in current_state.action_set:
+            good_move = None
+            action_list = list(current_state.action_set)
+            for row, col in action_list:
                 updated_state = current_state.apply_action(row, col, turn)
                 if debug:
                     print(lvl_str + 'Max@{}-({}, {}) => {}vs{}'.format(level, row, col, updated_state.my_score, updated_state.their_score))
-                min_val, min_row, min_col = get_min(updated_state, next_turn, level + 1)
+                min_val, _ = get_min(updated_state, next_turn, level + 1)
 
                 if min_val > utility_value:
                     utility_value = min_val
-                    max_row = row
-                    max_col = col
+                    good_move = (row, col)
+
                     if debug:
                         print(lvl_str + 'UpdatedMax@{} -> {}'.format(level, utility_value))
 
-            if debug and max_row < 0 or max_col < 0:
-                print('We reached here')
-
-            return utility_value, max_row, max_col
+            return utility_value, good_move
 
         def get_min(current_state, turn, level):
-            min_row = -1
-            min_col = -1
-
             lvl_str = '--' * level
 
             if len(current_state.action_set) == 0:
                 if debug:
-                    print(lvl_str + 'MinTerminal@{} with {} Utility'.format(level, current_state.get_utility(player_id)))
-                return current_state.get_utility(player_id), min_row, min_col
+                    print(lvl_str + 'MinTerminal@{} with {} Utility'.format(level, current_state.get_utility(self.player_id)))
+                return current_state.get_utility(self.player_id), None
 
-            utility_value = 2  # Because utility can only be 0 or 1
+            utility_value = float('inf')  # Because utility can only be 0 or 1
             next_turn = THEIR_EMITTER if turn == MY_EMITTER else MY_EMITTER
-            for row, col in current_state.action_set:
+            good_move = None
+            action_list = list(current_state.action_set)
+            for row, col in action_list:
                 updated_state = current_state.apply_action(row, col, turn)
                 if debug:
                     print(lvl_str + 'Min@{}-({}, {}) => {}vs{}'.format(level, row, col, updated_state.my_score, updated_state.their_score))
-                max_val, max_row, max_col = get_max(updated_state, next_turn, level + 1)
+                max_val, _ = get_max(updated_state, next_turn, level + 1)
 
                 if max_val < utility_value:
                     utility_value = max_val
-                    min_row = row
-                    min_col = col
+                    good_move = (row, col)
                     if debug:
                         print(lvl_str + 'UpdatedMin@{} -> {}'.format(level, utility_value))
 
-            if debug and min_row < 0 or min_col < 0:
-                print('We reached here')
+            return utility_value, good_move
 
-            return utility_value, min_row, min_col
+        sol_utility, sol = get_max(self.initial_state, self.player_id, 0)
 
-        sol_utility, sol_row, sol_col = get_max(self.initial_state, player_id, 0)
-
-        return sol_row, sol_col
+        return sol[0], sol[1]
 
 
 board = Board()
+#board.pretty_print()
 
-solver = MiniMaxSolver(board)
-solution_row, solution_col = solver.solve(MY_EMITTER, debug=False)
+cur_player = MY_EMITTER
+#cur_player = THEIR_EMITTER
+solver = MiniMaxSolver(board, cur_player)
+solution_row, solution_col = solver.solve(debug=False)
 
 output_fp = open('output.txt', 'w')
 output_fp.write('{} {}'.format(solution_row, solution_col))
