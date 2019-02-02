@@ -15,27 +15,24 @@ class Board(object):
         self.board_size = 0
         self.num_elements = 0
         self.board = []
-        self.__iter_count__ = 0
+        self.action_set = set()
         self.my_score = 0
         self.their_score = 0
-        self.actions_count = 0
 
         with open('input.txt', 'rU') as fp:
-            row = -1
-            for line in fp:
+            for row_idx, line in enumerate(fp):
                 line = line.rstrip('\n')
-                if row < 0:
+                if row_idx == 0:
                     self.board_size = int(line)
                     self.num_elements = self.board_size * self.board_size
                 else:
                     board_row = []
-                    for char in line:
+                    for col_idx, char in enumerate(line):
                         board_row.append(int(char))
                         if char == '0':
-                            self.actions_count += 1
+                            self.action_set.add((row_idx-1, col_idx))
 
                     self.board.append(board_row)
-                row += 1
 
         # Resolve Current Board
         for row in xrange(self.board_size):
@@ -46,31 +43,12 @@ class Board(object):
                     self.__plant_laser__(row, col, THEIR_EMITTER)
 
     def pretty_print(self):
-        print('Board {}x{} - {} vs {} - {} left'.format(self.board_size, self.board_size, self.my_score, self.their_score, self.actions_count))
+        print('Board {}x{} - {} vs {} - {} left'.format(self.board_size, self.board_size, self.my_score, self.their_score, len(self.action_set)))
         for board_row in self.board:
             row = ''
             for board_col in board_row:
                 row += '{} '.format(board_col)
             print(row)
-
-    def __iter__(self):
-        self.__iter_count__ = 0
-        return self
-
-    # Iterates on all empty spaces only
-    def next(self):
-        if self.__iter_count__ == self.num_elements:
-            raise StopIteration
-        else:
-            row = self.__iter_count__ // self.board_size
-            col = self.__iter_count__ % self.board_size
-
-            self.__iter_count__ += 1
-            cell = self.board[row][col]
-            if cell == WHITE_SPACE:
-                return cell, row, col
-            else:
-                return self.next()
 
     def __mark_along_axis__(self, row, col, x, y, mark_id):
         marked_locations = 0
@@ -82,8 +60,11 @@ class Board(object):
                 if cell == WHITE_SPACE:
                     self.board[row][col] = mark_id
                     marked_locations += 1
-                    self.actions_count -= 1  # Remove one action for each white space the emitter's laser occupies
-                elif cell != BLOCK:  # This condition is enough because a Laser can never hit another emitter
+                    # Remove one action for each white space the emitter's laser occupies
+                    self.action_set.remove((row, col))
+                elif cell != BLOCK and cell != mark_id:
+                    # This condition is enough because a Laser can never hit another emitter
+                    # We need to check if the cell is not mark_id because you don't want to double tag a laser count
                     self.board[row][col] = BOTH_LASERS
                     marked_locations += 1
                 else:
@@ -96,7 +77,8 @@ class Board(object):
     # Return: Get Score
     def __plant_laser__(self, row, col, player_id):
         self.board[row][col] = player_id
-        self.actions_count -= 1  # Remove one action because emitter is here
+        if (row, col) in self.action_set:
+            self.action_set.remove((row, col))
 
         mark_id = MY_LASER if player_id == MY_EMITTER else THEIR_LASER
         score = 1
@@ -128,7 +110,6 @@ class Board(object):
 class MiniMaxSolver:
     def __init__(self, initial_board):
         self.initial_state = initial_board
-        self.lookup = dict()
 
     def solve(self, player_id, debug=False):
         def get_max(current_state, turn, level):
@@ -137,14 +118,14 @@ class MiniMaxSolver:
 
             lvl_str = '--' * level
 
-            if current_state.actions_count == 0:
+            if len(current_state.action_set) == 0:
                 if debug:
                     print(lvl_str + 'MaxTerminal@{} with {} Utility'.format(level, current_state.get_utility(player_id)))
                 return current_state.get_utility(player_id), max_row, max_col
 
             utility_value = -1  # Because utility can only be 0 or 1
             next_turn = THEIR_EMITTER if turn == MY_EMITTER else MY_EMITTER
-            for cell, row, col in current_state:
+            for row, col in current_state.action_set:
                 updated_state = current_state.apply_action(row, col, turn)
                 if debug:
                     print(lvl_str + 'Max@{}-({}, {}) => {}vs{}'.format(level, row, col, updated_state.my_score, updated_state.their_score))
@@ -157,6 +138,9 @@ class MiniMaxSolver:
                     if debug:
                         print(lvl_str + 'UpdatedMax@{} -> {}'.format(level, utility_value))
 
+            if debug and max_row < 0 or max_col < 0:
+                print('We reached here')
+
             return utility_value, max_row, max_col
 
         def get_min(current_state, turn, level):
@@ -165,14 +149,14 @@ class MiniMaxSolver:
 
             lvl_str = '--' * level
 
-            if current_state.actions_count == 0:
+            if len(current_state.action_set) == 0:
                 if debug:
                     print(lvl_str + 'MinTerminal@{} with {} Utility'.format(level, current_state.get_utility(player_id)))
                 return current_state.get_utility(player_id), min_row, min_col
 
             utility_value = 2  # Because utility can only be 0 or 1
             next_turn = THEIR_EMITTER if turn == MY_EMITTER else MY_EMITTER
-            for cell, row, col in current_state:
+            for row, col in current_state.action_set:
                 updated_state = current_state.apply_action(row, col, turn)
                 if debug:
                     print(lvl_str + 'Min@{}-({}, {}) => {}vs{}'.format(level, row, col, updated_state.my_score, updated_state.their_score))
@@ -184,6 +168,9 @@ class MiniMaxSolver:
                     min_col = col
                     if debug:
                         print(lvl_str + 'UpdatedMin@{} -> {}'.format(level, utility_value))
+
+            if debug and min_row < 0 or min_col < 0:
+                print('We reached here')
 
             return utility_value, min_row, min_col
 
@@ -197,5 +184,5 @@ board = Board()
 solver = MiniMaxSolver(board)
 solution_row, solution_col = solver.solve(MY_EMITTER, debug=False)
 
-output_fp = open('output.txt', 'w')
+output_fp = open('output.txt' hw, 'w')
 output_fp.write('{} {}'.format(solution_row, solution_col))
