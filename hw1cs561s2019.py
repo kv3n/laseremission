@@ -1,6 +1,3 @@
-import copy
-from random import shuffle
-
 WHITE_SPACE = 0
 MY_EMITTER = 1
 THEIR_EMITTER = 2
@@ -12,20 +9,28 @@ DIRECTIONS = [-1, 0, 1]
 
 
 class Board(object):
-    def __init__(self):
+    def __init__(self, old_board=None):
         self.board_size = 0
-        self.num_elements = 0
         self.board = []
         self.action_set = set()
         self.my_score = 0
         self.their_score = 0
 
+        if old_board is None:
+            self.read_board()
+        else:
+            self.board_size = old_board.board_size
+            self.board = [board_row[:] for board_row in old_board.board]
+            self.action_set = set(old_board.action_set)
+            self.my_score = old_board.my_score
+            self.their_score = old_board.their_score
+
+    def read_board(self):
         with open('input.txt', 'r') as fp:
             for row_idx, line in enumerate(fp):
                 line = line.rstrip('\r\n')
                 if row_idx == 0:
                     self.board_size = int(line)
-                    self.num_elements = self.board_size * self.board_size
                 else:
                     board_row = []
                     for col_idx, char in enumerate(line):
@@ -97,7 +102,7 @@ class Board(object):
 
     # Out-of-place action application
     def apply_action(self, row, col, player_id):
-        applied_board = copy.deepcopy(self)
+        applied_board = Board(self)
         applied_board.__plant_laser__(row, col, player_id)
         return applied_board
 
@@ -114,7 +119,7 @@ class MiniMaxSolver:
         self.player_id = player_id
 
     def solve(self, debug=False):
-        def get_max(current_state, turn, level):
+        def get_max(current_state, turn, alpha, beta, level):
             lvl_str = '--' * level
 
             if len(current_state.action_set) == 0:
@@ -125,23 +130,26 @@ class MiniMaxSolver:
             utility_value = -float('inf')  # Because utility can only be 0 or 1
             next_turn = THEIR_EMITTER if turn == MY_EMITTER else MY_EMITTER
             good_move = None
-            action_list = list(current_state.action_set)
-            for row, col in action_list:
+
+            for row, col in current_state.action_set:
                 updated_state = current_state.apply_action(row, col, turn)
                 if debug:
                     print(lvl_str + 'Max@{}-({}, {}) => {}vs{}'.format(level, row, col, updated_state.my_score, updated_state.their_score))
-                min_val, _ = get_min(updated_state, next_turn, level + 1)
 
+                min_val, _ = get_min(updated_state, next_turn, alpha, beta, level + 1)
                 if min_val > utility_value:
                     utility_value = min_val
                     good_move = (row, col)
-
                     if debug:
                         print(lvl_str + 'UpdatedMax@{} -> {}'.format(level, utility_value))
 
+                alpha = max(utility_value, alpha)
+                if beta <= alpha:
+                    break
+
             return utility_value, good_move
 
-        def get_min(current_state, turn, level):
+        def get_min(current_state, turn, alpha, beta, level):
             lvl_str = '--' * level
 
             if len(current_state.action_set) == 0:
@@ -152,27 +160,32 @@ class MiniMaxSolver:
             utility_value = float('inf')  # Because utility can only be 0 or 1
             next_turn = THEIR_EMITTER if turn == MY_EMITTER else MY_EMITTER
             good_move = None
-            action_list = list(current_state.action_set)
-            for row, col in action_list:
+
+            for row, col in current_state.action_set:
                 updated_state = current_state.apply_action(row, col, turn)
                 if debug:
                     print(lvl_str + 'Min@{}-({}, {}) => {}vs{}'.format(level, row, col, updated_state.my_score, updated_state.their_score))
-                max_val, _ = get_max(updated_state, next_turn, level + 1)
 
+                max_val, _ = get_max(updated_state, next_turn, alpha, beta, level + 1)
                 if max_val < utility_value:
                     utility_value = max_val
                     good_move = (row, col)
                     if debug:
                         print(lvl_str + 'UpdatedMin@{} -> {}'.format(level, utility_value))
 
+                beta = min(utility_value, beta)
+                if beta <= alpha:
+                    break
+
             return utility_value, good_move
 
-        sol_utility, sol = get_max(self.initial_state, self.player_id, 0)
+        sol_utility, sol = get_max(self.initial_state, self.player_id, -float('inf'), float('inf'), 0)
 
         return sol[0], sol[1]
 
 
 board = Board()
+board.read_board()
 #board.pretty_print()
 
 cur_player = MY_EMITTER
