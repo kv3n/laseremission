@@ -5,7 +5,11 @@ BLOCK = 3
 MY_LASER = 4
 THEIR_LASER = 5
 BOTH_LASERS = 6
-DIRECTIONS = [-1, 0, 1]
+DIRECTIONS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
+
+emitter_laser_mapping = dict()
+emitter_laser_mapping[MY_EMITTER] = MY_LASER
+emitter_laser_mapping[THEIR_EMITTER] = THEIR_LASER
 
 
 class Board(object):
@@ -48,6 +52,7 @@ class Board(object):
                 elif self.board[row][col] == THEIR_EMITTER:
                     self.__plant_laser__(row, col, THEIR_EMITTER)
 
+    """
     def pretty_print(self):
         print('Board {}x{} - {} vs {} - {} left'.format(self.board_size, self.board_size, self.my_score, self.their_score, len(self.action_set)))
         for board_row in self.board:
@@ -55,6 +60,7 @@ class Board(object):
             for board_col in board_row:
                 row += '{} '.format(board_col)
             print(row)
+    """
 
     def __mark_along_axis__(self, row, col, x, y, mark_id):
         marked_locations = 0
@@ -86,13 +92,11 @@ class Board(object):
         if (row, col) in self.action_set:
             self.action_set.remove((row, col))
 
-        mark_id = MY_LASER if player_id == MY_EMITTER else THEIR_LASER
+        mark_id = emitter_laser_mapping[player_id]
         score = 1
 
-        for x in DIRECTIONS:
-            for y in DIRECTIONS:
-                if x != 0 or y != 0:
-                    score += self.__mark_along_axis__(row, col, x, y, mark_id)
+        for x, y in DIRECTIONS:
+            score += self.__mark_along_axis__(row, col, x, y, mark_id)
 
         # Keep Tracking of whites
         if player_id == MY_EMITTER:
@@ -106,42 +110,29 @@ class Board(object):
         applied_board.__plant_laser__(row, col, player_id)
         return applied_board
 
-    def get_utility(self, for_player):
-        if for_player == MY_EMITTER:
-            return int(self.my_score > self.their_score)
-        else:
-            return int(self.their_score > self.my_score)
+    def get_utility(self):
+        return int(self.my_score > self.their_score)
 
 
 class MiniMaxSolver:
-    def __init__(self, initial_board, player_id):
+    def __init__(self, initial_board):
         self.initial_state = initial_board
-        self.player_id = player_id
 
-    def solve(self, debug=False):
-        def get_max(current_state, turn, alpha, beta, level):
-            lvl_str = '--' * level
-
+    def solve(self):
+        def get_max(current_state, alpha, beta, level):
             if len(current_state.action_set) == 0:
-                if debug:
-                    print(lvl_str + 'MaxTerminal@{} with {} Utility'.format(level, current_state.get_utility(self.player_id)))
-                return current_state.get_utility(self.player_id), None
+                return current_state.get_utility(), None
 
             utility_value = -float('inf')  # Because utility can only be 0 or 1
-            next_turn = THEIR_EMITTER if turn == MY_EMITTER else MY_EMITTER
             good_move = None
 
             for row, col in current_state.action_set:
-                updated_state = current_state.apply_action(row, col, turn)
-                if debug:
-                    print(lvl_str + 'Max@{}-({}, {}) => {}vs{}'.format(level, row, col, updated_state.my_score, updated_state.their_score))
+                updated_state = current_state.apply_action(row, col, MY_EMITTER)
 
-                min_val, _ = get_min(updated_state, next_turn, alpha, beta, level + 1)
+                min_val, _ = get_min(updated_state, alpha, beta, level + 1)
                 if min_val > utility_value:
                     utility_value = min_val
                     good_move = (row, col)
-                    if debug:
-                        print(lvl_str + 'UpdatedMax@{} -> {}'.format(level, utility_value))
 
                 alpha = max(utility_value, alpha)
                 if beta <= alpha:
@@ -149,29 +140,20 @@ class MiniMaxSolver:
 
             return utility_value, good_move
 
-        def get_min(current_state, turn, alpha, beta, level):
-            lvl_str = '--' * level
-
+        def get_min(current_state, alpha, beta, level):
             if len(current_state.action_set) == 0:
-                if debug:
-                    print(lvl_str + 'MinTerminal@{} with {} Utility'.format(level, current_state.get_utility(self.player_id)))
-                return current_state.get_utility(self.player_id), None
+                return current_state.get_utility(), None
 
             utility_value = float('inf')  # Because utility can only be 0 or 1
-            next_turn = THEIR_EMITTER if turn == MY_EMITTER else MY_EMITTER
             good_move = None
 
             for row, col in current_state.action_set:
-                updated_state = current_state.apply_action(row, col, turn)
-                if debug:
-                    print(lvl_str + 'Min@{}-({}, {}) => {}vs{}'.format(level, row, col, updated_state.my_score, updated_state.their_score))
+                updated_state = current_state.apply_action(row, col, THEIR_EMITTER)
 
-                max_val, _ = get_max(updated_state, next_turn, alpha, beta, level + 1)
+                max_val, _ = get_max(updated_state, alpha, beta, level + 1)
                 if max_val < utility_value:
                     utility_value = max_val
                     good_move = (row, col)
-                    if debug:
-                        print(lvl_str + 'UpdatedMin@{} -> {}'.format(level, utility_value))
 
                 beta = min(utility_value, beta)
                 if beta <= alpha:
@@ -179,19 +161,15 @@ class MiniMaxSolver:
 
             return utility_value, good_move
 
-        sol_utility, sol = get_max(self.initial_state, self.player_id, -float('inf'), float('inf'), 0)
+        sol_utility, sol = get_max(self.initial_state, -float('inf'), float('inf'), 0)
 
         return sol[0], sol[1]
 
 
 board = Board()
-board.read_board()
-#board.pretty_print()
 
-cur_player = MY_EMITTER
-#cur_player = THEIR_EMITTER
-solver = MiniMaxSolver(board, cur_player)
-solution_row, solution_col = solver.solve(debug=False)
+solver = MiniMaxSolver(board)
+solution_row, solution_col = solver.solve()
 
 output_fp = open('output.txt', 'w')
 output_fp.write('{} {}'.format(solution_row, solution_col))
