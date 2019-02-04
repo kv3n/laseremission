@@ -8,8 +8,8 @@ BOTH_LASERS = 6
 DIRECTIONS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
 
 emitter_laser_mapping = dict()
-emitter_laser_mapping[MY_EMITTER] = MY_LASER
-emitter_laser_mapping[THEIR_EMITTER] = THEIR_LASER
+emitter_laser_mapping[MY_EMITTER] = (MY_LASER, THEIR_LASER)
+emitter_laser_mapping[THEIR_EMITTER] = (THEIR_LASER, MY_LASER)
 
 
 class Board(object):
@@ -64,25 +64,27 @@ class Board(object):
 
     def __mark_along_axis__(self, row, col, x, y, mark_id):
         marked_locations = 0
-        for step in xrange(3):  # Always take three steps from emitter location
+        step = 0
+        while step < 3:  # Always take three steps from emitter location
             row += x
             col += y
             if 0 <= row < self.board_size and 0 <= col < self.board_size:
                 cell = self.board[row][col]
                 if cell == WHITE_SPACE:
-                    self.board[row][col] = mark_id
+                    self.board[row][col] = mark_id[0]
                     marked_locations += 1
                     # Remove one action for each white space the emitter's laser occupies
                     self.action_set.remove((row, col))
-                elif cell != BLOCK and cell != mark_id:
+                elif cell == BLOCK:
+                    break
+                elif cell == mark_id[1]:
                     # This condition is enough because a Laser can never hit another emitter
                     # We need to check if the cell is not mark_id because you don't want to double tag a laser count
                     self.board[row][col] = BOTH_LASERS
                     marked_locations += 1
-                elif cell == BLOCK:
-                    break
             else:
                 break
+            step += 1
         return marked_locations
 
     # Should be called on empty space only. This is done to avoid unnecessary == 0 check.
@@ -93,10 +95,7 @@ class Board(object):
             self.action_set.remove((row, col))
 
         mark_id = emitter_laser_mapping[player_id]
-        score = 1
-
-        for x, y in DIRECTIONS:
-            score += self.__mark_along_axis__(row, col, x, y, mark_id)
+        score = 1 + sum([self.__mark_along_axis__(row, col, x, y, mark_id) for x, y in DIRECTIONS])
 
         # Keep Tracking of whites
         if player_id == MY_EMITTER:
@@ -173,3 +172,5 @@ solution_row, solution_col = solver.solve()
 
 output_fp = open('output.txt', 'w')
 output_fp.write('{} {}'.format(solution_row, solution_col))
+
+#print ('BoardSize: {} @ {} seconds'.format(board.board_size, end-start))
